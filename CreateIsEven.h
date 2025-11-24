@@ -6,6 +6,5 @@
 #include <stdbool.h>
 #include <string.h>
 
-char *CreateIsEven(bool tabs, unsigned long int howFar);
-
+int CreateIsEvenFile(bool tabs, unsigned long int howFar, const char *outPath);
 #endif // CREATEISEVEN_H

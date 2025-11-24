@@ -2,6 +2,11 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
 
 #define FUNCTIONDEF "int IsEven(unsigned long int a) {\n"
 #define STIFSTATEMENT "if (a=="
@@ -36,13 +41,9 @@ unsigned long int addNumber(char *variable, unsigned long int num, unsigned long
     return currentSize;
 }
 
-
-char *CreateIsEven(bool tabs, unsigned long int howFar) {
-    char indent[5];
+int CreateIsEvenFile(bool tabs, unsigned long int howFar, const char *outPath) {
+    char indent[8];
     unsigned long int indentSize = 0;
-    char *functionString = NULL;
-    unsigned long int functionLen = 0;
-    unsigned long int functionCap = 0;
     if (tabs) {
         indentSize = sizeof(TABS)-1;
         memcpy(indent, TABS, indentSize);
@@ -51,59 +52,108 @@ char *CreateIsEven(bool tabs, unsigned long int howFar) {
         indentSize = sizeof(SPACES)-1;
         memcpy(indent, SPACES, indentSize);
     }
-    functionString = realloc(functionString, 4096);
-    if (!functionString) exit(-1);
-    functionCap = 4096;
-    functionLen = sizeof(FUNCTIONDEF)-1;
-    memcpy(functionString, FUNCTIONDEF, functionLen); // pretty sure it's 20 chars, I hope it is at least.
-    
 
-    bool isEven = 1;
-    for (unsigned long int i = 0; i < howFar; i++) {
-        if (functionCap-functionLen<EXTRASPACE) {
-            functionCap *= MULTIPLICATEMEM;
-            functionString = realloc(functionString, functionCap);
-            if (!functionString) exit(-1);
+    size_t s_FUNCTIONDEF = sizeof(FUNCTIONDEF)-1;
+    size_t s_STIF = sizeof(STIFSTATEMENT)-1;
+    size_t s_EDIF = sizeof(EDIFSTATEMENT)-1;
+    size_t s_RETURN0 = sizeof(RETURNSTAT0)-1;
+    size_t s_RETURN1 = sizeof(RETURNSTAT1)-1;
+    size_t s_RETURN2 = sizeof(RETURNSTAT2)-1;
+    size_t s_OUTSIDEIF = sizeof(OUTSIDEIF)-1;
+
+    unsigned long int digits_max = 1;
+    if (howFar > 1) {
+        unsigned long int tmp = howFar - 1;
+        digits_max = 0;
+        while (tmp != 0) {
+            digits_max++;
+            tmp /= 10;
         }
+    }
 
-        memcpy(functionString+functionLen, indent, indentSize);
+    size_t per_iter = 0;
+    per_iter += indentSize;
+    per_iter += s_STIF + digits_max + s_EDIF;
+    per_iter += indentSize * 2;
+    per_iter += (s_RETURN0 > s_RETURN1 ? s_RETURN0 : s_RETURN1);
+    per_iter += indentSize;
+    per_iter += s_OUTSIDEIF;
+    size_t total_est = s_FUNCTIONDEF + howFar * per_iter + indentSize + s_RETURN2 + 1 + EXTRASPACE;
+
+    int fd = open(outPath, O_RDWR | O_CREAT | O_TRUNC, 0666);
+    if (fd < 0) {
+        perror("open");
+        return -1;
+    }
+    if (ftruncate(fd, (off_t)total_est) != 0) {
+        perror("ftruncate");
+        close(fd);
+        return -1;
+    }
+
+    char *map = mmap(NULL, total_est, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (map == MAP_FAILED) {
+        perror("mmap");
+        close(fd);
+        return -1;
+    }
+
+    unsigned long int functionLen = 0;
+    bool isEven = 1;
+
+    memcpy(map + functionLen, FUNCTIONDEF, s_FUNCTIONDEF);
+    functionLen += s_FUNCTIONDEF;
+
+    for (unsigned long int i = 0; i < howFar; i++) {
+        printf("%lu\n", i);
+        memcpy(map + functionLen, indent, indentSize);
         functionLen += indentSize;
 
-        memcpy(functionString+functionLen, STIFSTATEMENT, sizeof(STIFSTATEMENT)-1);
-        functionLen += sizeof(STIFSTATEMENT)-1;
-        functionLen = addNumber(functionString, i, functionLen);
-        memcpy(functionString+functionLen, EDIFSTATEMENT, sizeof(EDIFSTATEMENT)-1);
-        functionLen += sizeof(EDIFSTATEMENT)-1;
+        memcpy(map + functionLen, STIFSTATEMENT, s_STIF);
+        functionLen += s_STIF;
 
-        memcpy(functionString+functionLen, indent, indentSize);
+        functionLen = addNumber(map, i, functionLen);
+
+        memcpy(map + functionLen, EDIFSTATEMENT, s_EDIF);
+        functionLen += s_EDIF;
+
+        memcpy(map + functionLen, indent, indentSize);
         functionLen += indentSize;
-        memcpy(functionString+functionLen, indent, indentSize);
+        memcpy(map + functionLen, indent, indentSize);
         functionLen += indentSize;
 
         if (isEven) {
-            memcpy(functionString+functionLen, RETURNSTAT1, sizeof(RETURNSTAT1)-1);
-            functionLen += sizeof(RETURNSTAT1)-1;
+            memcpy(map + functionLen, RETURNSTAT1, s_RETURN1);
+            functionLen += s_RETURN1;
             isEven = false;
-        }
-        else {
-            memcpy(functionString+functionLen, RETURNSTAT0, sizeof(RETURNSTAT0)-1);
-            functionLen += sizeof(RETURNSTAT0)-1;
+        } else {
+            memcpy(map + functionLen, RETURNSTAT0, s_RETURN0);
+            functionLen += s_RETURN0;
             isEven = true;
         }
 
-        memcpy(functionString+functionLen, indent, indentSize);
+        memcpy(map + functionLen, indent, indentSize);
         functionLen += indentSize;
-        
-        memcpy(functionString+functionLen, OUTSIDEIF, sizeof(OUTSIDEIF)-1);
-        functionLen += sizeof(OUTSIDEIF)-1;
+
+        memcpy(map + functionLen, OUTSIDEIF, s_OUTSIDEIF);
+        functionLen += s_OUTSIDEIF;
     }
-    memcpy(functionString+functionLen, indent, indentSize);
+
+    memcpy(map + functionLen, indent, indentSize);
     functionLen += indentSize;
+    memcpy(map + functionLen, RETURNSTAT2, s_RETURN2);
+    functionLen += s_RETURN2;
 
+    if (functionLen < total_est) {
+        map[functionLen] = '\0';
+    }
 
-    memcpy(functionString+functionLen, RETURNSTAT2, sizeof(RETURNSTAT2)-1);
-    functionLen += sizeof(RETURNSTAT2)-1;
-
-    functionString[functionLen] = '\0';
-    return functionString;
+    if (msync(map, functionLen + 1, MS_SYNC) != 0) {
+        perror("msync");
+    }
+    if (munmap(map, total_est) != 0) {
+        perror("munmap");
+    }
+    close(fd);
+    return 0;
 }
