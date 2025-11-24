@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 
-#define FUNCTIONDEF "int IsEven(int a) {\n"
+#define FUNCTIONDEF "int IsEven(unsigned long int a) {\n"
 #define STIFSTATEMENT "if (a=="
 #define EDIFSTATEMENT ") {\n"
 #define RETURNSTAT0 "return 0;\n"
