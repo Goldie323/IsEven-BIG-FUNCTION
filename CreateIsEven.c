@@ -16,17 +16,26 @@
 #define EXTRASPACE 500
 #define MULTIPLICATEMEM 2
 
+#define ASCIIZERO 48
+
 unsigned long int addNumber(char *variable, unsigned long int num, unsigned long int currentSize) {
-    unsigned long int modulo = num % 10;
-    unsigned long int divided = num / 10;
-    variable[currentSize++] = modulo+ASCIIZERO;
-    while (divided != 0) {
-        modulo = divided % 10;
-        divided = divided / 10;
-        variable[currentSize++] = modulo+ASCIIZERO;
+    if (num == 0) {
+        variable[currentSize++] = '0';
+        return currentSize;
+    }
+    unsigned long int temp = num;
+    unsigned long int digits[20]; // enough for 64-bit unsigned long
+    unsigned int count = 0;
+    while (temp != 0) {
+        digits[count++] = temp % 10;
+        temp /= 10;
+    }
+    for (int i = count - 1; i >= 0; i--) {
+        variable[currentSize++] = digits[i] + ASCIIZERO;
     }
     return currentSize;
 }
+
 
 char *CreateIsEven(bool tabs, unsigned long int howFar) {
     char indent[5];
