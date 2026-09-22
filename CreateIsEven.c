@@ -144,15 +144,14 @@ int CreateIsEvenFile(bool tabs, unsigned long int howFar, const char *outPath) {
     memcpy(map + functionLen, RETURNSTAT2, s_RETURN2);
     functionLen += s_RETURN2;
 
-    if (functionLen < total_est) {
-        map[functionLen] = '\0';
-    }
-
     if (msync(map, functionLen + 1, MS_SYNC) != 0) {
         perror("msync");
     }
     if (munmap(map, total_est) != 0) {
         perror("munmap");
+    }
+    if (ftruncate(fd, (off_t)functionLen) != 0) {
+        perror("final ftruncate");
     }
     close(fd);
     return 0;
